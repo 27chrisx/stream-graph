@@ -16067,7 +16067,7 @@ export default class App extends Component {
     const tail = this.state.tail
     // 定位
     this.state.points[this.state.available[0]].map((point) => {
-      if (Math.floor(Number(event.clientX) - Number(svgPositionX)) === Math.floor((Number(point.x))) && event.clientY - svgPositionY >= 20.2 && event.clientY - svgPositionY <= 475 && key !== 1) {
+      if (Math.floor(Number(event.clientX + 18) - Number(svgPositionX)) <= Math.floor((Number(point.x)) + 20) && Math.floor(Number(event.clientX + 18) - Number(svgPositionX)) >= Math.floor((Number(point.x)) - 20) && event.clientY - svgPositionY >= 20.2 && event.clientY - svgPositionY <= 475 && key !== 1) {
         key = 1
         pointX = point.x
         position = i
@@ -16093,7 +16093,7 @@ export default class App extends Component {
         // 修改提示框
         hintBoxHTML: <g className='innerHintBox'>
                 <rect x='830' y='20.2' width='105' height='450' style={{ fill: '#fff', stroke: '#000', strokeWidth: '0.5px' }}></rect>
-                <text x='840' y='50' fontWeight='550'>{String(position + 1920)}</text>
+                <text x='840' y='50' fontWeight='550'>{String(position + Number(this.state.xScale[0]))}</text>
                 <g style={{ fontSize: '12.8' }}>
                 <text x='840' y='100'>
                     {typesText[0]}
@@ -16201,6 +16201,8 @@ export default class App extends Component {
         available: graph.available,
         tail: graph.tail
       })
+
+      document.getElementById('keyRect').beginElement()
     }
   }
 
@@ -16253,6 +16255,10 @@ export default class App extends Component {
       return i++ * unitY
     })
 
+    if (yScale[1] !== this.state.yScale[1]) {
+      document.getElementById('keyLittleRect').beginElement()
+    }
+
     this.setState({
       xScale,
       yScale
@@ -16288,8 +16294,16 @@ export default class App extends Component {
     // 整合线条字符串
     available.map((id) => {
       lines[id] = ''
+      let i = 0
       points[id].map((point) => {
-        lines[id] += (String(point.x) + ',' + String(point.y) + ' ')
+        if (i === 0) {
+          lines[id] += 'M ' + String(point.x) + ' ' + String(point.y) + ' '
+        } else if (i === 1) {
+          lines[id] += 'C ' + String(points[id][0].x + 20.0 / (xScale[1] - xScale[0])) + ' ' + String(points[id][0].y) + ' ' + String(point.x - 20.0 / (xScale[1] - xScale[0])) + ' ' + String(point.y) + ' ' + String(point.x) + ' ' + String(point.y) + ' '
+        } else {
+          lines[id] += 'S ' + String(point.x - 20.0 / (xScale[1] - xScale[0])) + ' ' + String(point.y) + ' ' + String(point.x) + ' ' + String(point.y) + ' '
+        }
+        i++
         return null
       })
       return null
@@ -16309,8 +16323,18 @@ export default class App extends Component {
     available.map((id) => {
       if (id !== tail) {
         const pointSet = points[available[i + 1]].reverse()
+        let j = 0
         pointSet.map((point) => {
-          bars[id] += (String(point.x) + ',' + String(point.y) + ' ')
+          if (j === 0) {
+            bars[id] += 'V ' + String(point.y) + ' '
+          } else if (j === 1) {
+            bars[id] += 'C ' + String(pointSet[0].x - 20.0 / (xScale[1] - xScale[0])) + ' ' + String(pointSet[0].y) + ' ' + String(point.x + 20.0 / (xScale[1] - xScale[0])) + ' ' + String(point.y) + ' ' + String(point.x) + ' ' + String(point.y) + ' '
+          } else if (j === pointSet.length - 1) {
+            bars[id] += 'C ' + String(pointSet[pointSet.length - 2].x - 20.0 / (xScale[1] - xScale[0])) + ' ' + String(pointSet[pointSet.length - 2].y) + ' ' + String(point.x + 20.0 / (xScale[1] - xScale[0])) + ' ' + String(point.y) + ' ' + String(point.x) + ' ' + String(point.y) + ' '
+          } else {
+            bars[id] += 'S ' + String(point.x + 20.0 / (xScale[1] - xScale[0])) + ' ' + String(point.y) + ' ' + String(point.x) + ' ' + String(point.y) + ' '
+          }
+          j++
           return null
         })
       }
@@ -16322,10 +16346,10 @@ export default class App extends Component {
     available.map((id) => {
       if (id !== tail) {
         i = id
-        dataLinesHTML[id] = <polyline points={lines[id]} style={{ fill: 'none', stroke: colors[id], strokeWidth: '1.5px' }}></polyline>
-        dataBarsHTML[id] = <polyline points={bars[id]} style={{ fill: colors[id], fillOpacity: 0.7 }}></polyline>
+        dataLinesHTML[id] = <path id={lines[id]} d={lines[id]} style={{ fill: 'none', stroke: colors[id], strokeWidth: '1.5px' }}></path>
+        dataBarsHTML[id] = <path d={bars[id]} style={{ fill: colors[id], fillOpacity: 0.7 }}></path>
       } else {
-        dataLinesHTML[id] = <polyline points={lines[id]} style={{ fill: 'none', stroke: colors[i], strokeWidth: '1.5px' }}></polyline>
+        dataLinesHTML[id] = <path d={lines[id]} style={{ fill: 'none', stroke: colors[i], strokeWidth: '1.5px' }}></path>
       }
       return null
     })
@@ -16352,6 +16376,7 @@ export default class App extends Component {
     }
   }
 
+  // 拖拽函数
   drag1 = () => {
     this.setState({ isMouseDown1: true })
   }
@@ -16410,45 +16435,76 @@ export default class App extends Component {
     return (
             <div className='divRoot' onMouseMove={this.dragging} onMouseUp={this.undrag}>
             <svg id='table' className='table' onMouseMove={this.hint}>
+                {/* 渲染数据线 */}
+                <g id='dataLines' className='dataLines'>
+                {this.state.dataLinesHTML[0]}
+                {this.state.dataLinesHTML[1]}
+                {this.state.dataLinesHTML[2]}
+                {this.state.dataLinesHTML[3]}
+                {this.state.dataLinesHTML[4]}
+                {this.state.dataLinesHTML[5]}
+                {this.state.dataLinesHTML[6]}
+                {this.state.dataLinesHTML[7]}
+                {this.state.dataLinesHTML[8]}
+                {this.state.dataLinesHTML[9]}
+                </g>
+                {/* 渲染数据块 */}
+                <g className='dataBars'>
+                {this.state.dataBarsHTML[0]}
+                {this.state.dataBarsHTML[1]}
+                {this.state.dataBarsHTML[2]}
+                {this.state.dataBarsHTML[3]}
+                {this.state.dataBarsHTML[4]}
+                {this.state.dataBarsHTML[5]}
+                {this.state.dataBarsHTML[6]}
+                {this.state.dataBarsHTML[7]}
+                {this.state.dataBarsHTML[8]}
+                </g>
+                {/* 渲染大蒙版矩形 */}
+                <g>
+                <rect x='850' y='0' width='850' height='500' style={{ stroke: '#fff', fill: '#fff' }} >
+                <animate id='keyRect' attributeName="x" from="0" to="850" dur="2s" repeatCount="1" restart="whenNotActive" />
+                </rect>
+                </g>
                 {/* 渲染横向线 */}
                 <g className='xLines'>
                 <line className='xAxis' x1="30" y1="475" x2="830" y2="475" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1.5' }}/>
-                <line className='xLine' x1="30" y1="437.1" x2="830" y2="437.1" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="399.2" x2="830" y2="399.2" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="361.3" x2="830" y2="361.3" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="323.4" x2="830" y2="323.4" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="285.5" x2="830" y2="285.5" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="247.6" x2="830" y2="247.6" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="209.7" x2="830" y2="209.7" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="171.8" x2="830" y2="171.8" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="133.9" x2="830" y2="133.9" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="96" x2="830" y2="96" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="58.1" x2="830" y2="58.1" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='xLine' x1="30" y1="20.2" x2="830" y2="20.2" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="437.1" x2="830" y2="437.1" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="399.2" x2="830" y2="399.2" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="361.3" x2="830" y2="361.3" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="323.4" x2="830" y2="323.4" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="285.5" x2="830" y2="285.5" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="247.6" x2="830" y2="247.6" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="209.7" x2="830" y2="209.7" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="171.8" x2="830" y2="171.8" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="133.9" x2="830" y2="133.9" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="96" x2="830" y2="96" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="58.1" x2="830" y2="58.1" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='xLine' x1="30" y1="20.2" x2="830" y2="20.2" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
                 </g>
                 {/* 渲染纵向线 */}
                 <g className='yLines'>
                 <line className='yAxis' x1="35" y1="480" x2="35" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1.5' }}/>
-                <line className='yLine' x1="74.75" y1="480" x2="74.75" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="114.5" y1="480" x2="114.5" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="154.25" y1="480" x2="154.25" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="194" y1="480" x2="194" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="233.75" y1="480" x2="233.75" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="273.5" y1="480" x2="273.5" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="313.25" y1="480" x2="313.25" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="353" y1="480" x2="353" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="392.75" y1="480" x2="392.75" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="432.5" y1="480" x2="432.5" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="472.25" y1="480" x2="472.25" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="512" y1="480" x2="512" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="551.75" y1="480" x2="551.75" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="591.5" y1="480" x2="591.5" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="631.25" y1="480" x2="631.25" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="671" y1="480" x2="671" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="710.75" y1="480" x2="710.75" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="750.5" y1="480" x2="750.5" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="790.25" y1="480" x2="790.25" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
-                <line className='yLine' x1="830" y1="480" x2="830" y2="20" style={{ stroke: 'rgb(75, 43, 0)', strokeWidth: '1' }}/>
+                <line className='yLine' x1="74.75" y1="480" x2="74.75" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="114.5" y1="480" x2="114.5" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="154.25" y1="480" x2="154.25" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="194" y1="480" x2="194" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="233.75" y1="480" x2="233.75" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="273.5" y1="480" x2="273.5" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="313.25" y1="480" x2="313.25" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="353" y1="480" x2="353" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="392.75" y1="480" x2="392.75" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="432.5" y1="480" x2="432.5" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="472.25" y1="480" x2="472.25" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="512" y1="480" x2="512" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="551.75" y1="480" x2="551.75" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="591.5" y1="480" x2="591.5" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="631.25" y1="480" x2="631.25" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="671" y1="480" x2="671" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="710.75" y1="480" x2="710.75" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="750.5" y1="480" x2="750.5" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="790.25" y1="480" x2="790.25" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
+                <line className='yLine' x1="830" y1="480" x2="830" y2="20" style={{ stroke: '#ae9052', strokeWidth: '1' }}/>
                 </g>
                 {/* 渲染x刻度 */}
                 <g className='xScale'>
@@ -16491,6 +16547,10 @@ export default class App extends Component {
                 <text x='10' y='442.9' fill='rgb(75, 43, 0)' style={{ fontSize: '15' }}>{this.state.yScale[5]}</text>
                 <text x='10' y='480.8' fill='rgb(75, 43, 0)' style={{ fontSize: '15' }}>{this.state.yScale[6]}</text>
                 </g>
+                {/* 渲染小蒙版矩形 */}
+                <rect x='-30' y='0' width='30' height='480' style={{ stroke: '#fff', fill: '#fff' }} >
+                <animate id='keyLittleRect' attributeName="x" from="0" to="-30" dur="2s" repeatCount="1" restart="whenNotActive" />
+                </rect>
                 {/* 渲染比例尺 */}
                 <g className='ruler'>
                 <line className='rulerLine' x1="30" y1="515" x2="860" y2="515" style={{ stroke: '#e4ccc0', strokeWidth: '3' }}/>
@@ -16517,31 +16577,6 @@ export default class App extends Component {
                 <text x='858' y='356' style={{ fontSize: '12.8' }}>History</text>
                 <text x='861' y='406' style={{ fontSize: '12.8' }}>Music</text>
                 <text x='860' y='456' style={{ fontSize: '12.8' }}>Family</text>
-                </g>
-                {/* 渲染数据线 */}
-                <g id='dataLines' className='dataLines'>
-                {this.state.dataLinesHTML[0]}
-                {this.state.dataLinesHTML[1]}
-                {this.state.dataLinesHTML[2]}
-                {this.state.dataLinesHTML[3]}
-                {this.state.dataLinesHTML[4]}
-                {this.state.dataLinesHTML[5]}
-                {this.state.dataLinesHTML[6]}
-                {this.state.dataLinesHTML[7]}
-                {this.state.dataLinesHTML[8]}
-                {this.state.dataLinesHTML[9]}
-                </g>
-                {/* 渲染数据块 */}
-                <g className='dataBars'>
-                {this.state.dataBarsHTML[0]}
-                {this.state.dataBarsHTML[1]}
-                {this.state.dataBarsHTML[2]}
-                {this.state.dataBarsHTML[3]}
-                {this.state.dataBarsHTML[4]}
-                {this.state.dataBarsHTML[5]}
-                {this.state.dataBarsHTML[6]}
-                {this.state.dataBarsHTML[7]}
-                {this.state.dataBarsHTML[8]}
                 </g>
                 {/* 渲染提示线 */}
                 <g id='hintLine' className='hintLine'>{this.state.hintLineHTML}</g>
